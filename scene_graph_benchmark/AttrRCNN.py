@@ -1,4 +1,4 @@
-# Copyright (c) 2021 Microsoft Corporation. Licensed under the MIT license. 
+# Copyright (c) 2021 Microsoft Corporation. Licensed under the MIT license.
 """
 Implements the FRCNN with Attribute Head
 """

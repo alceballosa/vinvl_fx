@@ -51,6 +51,7 @@ TEST:
     SAVE_RESULTS_TO_TSV: True
     TSV_SAVE_SUBSET: ['rect', 'class', 'conf', 'feature']
     GATHER_ON_CPU: True
+    OUTPUT_FEATURE: True
 OUTPUT_DIR: "./output/X152C5_test"
 DATA_DIR: "./datasets"
 DISTRIBUTED_BACKEND: 'gloo'
