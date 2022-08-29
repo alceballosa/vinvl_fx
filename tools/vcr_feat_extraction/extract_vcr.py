@@ -21,7 +21,6 @@ from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
 from maskrcnn_benchmark.utils.miscellaneous import mkdir
 from scene_graph_benchmark.AttrRCNN import AttrRCNN
 from scene_graph_benchmark.config import sg_cfg
-from scene_graph_benchmark.scene_parser import SceneParser
 from tools.vcr_feat_extraction.detect_utils import detect_objects_on_single_image
 from tools.vcr_feat_extraction.visual_utils import draw_bb, draw_rel
 
@@ -82,12 +81,12 @@ def process_vcr_item(model, item: dict, path_dataset: Path, cfg: dict):
     img = cv2.imread(str(path_img))
     with open(path_metadata, "r", encoding="utf-8") as file:
         metadata = json.load(file)
-    boxes = torch.Tensor([box[0:4] for box in metadata["boxes"]])
-    box_list = BoxList(bbox=boxes, image_size=img.shape[0:2], mode="xyxy")
-    #box_list.add_field("labels", metadata["names"])
-
+    boxes = [box[0:4] for box in metadata["boxes"]]
+    box_list = BoxList(bbox=boxes, image_size=(img.shape[1], img.shape[0]), mode="xyxy")
+    # box_list.add_field("labels", metadata["names"])
     transforms = build_transforms(cfg, is_train=False)
     dets = detect_objects_on_single_image(model, transforms, img, box_list)
+    return img, dets
 
 
 def main():
@@ -127,6 +126,9 @@ def main():
     cfg.set_new_allowed(False)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+
+    cfg.MODEL.ROI_BOX_HEAD.FORCE_BOXES = True
+    
     cfg.freeze()
 
     assert op.isfile(args.jsonl_file), "Jsonl file: {} does not exist".format(
@@ -142,12 +144,7 @@ def main():
 
     output_dir = cfg.OUTPUT_DIR
 
-    if cfg.MODEL.META_ARCHITECTURE == "SceneParser":
-        model = SceneParser(cfg)
-    elif cfg.MODEL.META_ARCHITECTURE == "AttrRCNN":
-        model = AttrRCNN(cfg)
-    else:
-        raise NotImplementedError("Must choose between SceneParser and AttrRCNN")
+    model = AttrRCNN(cfg)
 
     model.to(cfg.MODEL.DEVICE)
     model.eval()
@@ -181,15 +178,9 @@ def main():
             int(val): key for key, val in dataset_allmap["predicate_to_idx"].items()
         }
 
-    for idx in tqdm(range(len(items))):
-        process_vcr_item(model, items[idx], path_dataset, cfg)
-        break
-
-    return
-
-    if isinstance(model, SceneParser):
-        rel_dets = dets["relations"]
-        dets = dets["objects"]
+    # for idx in tqdm(range(len(items))):
+    cv2_img, dets = process_vcr_item(model, items[0], path_dataset, cfg)
+    #    break
 
     for obj in dets:
         obj["class"] = dataset_labelmap[obj["class"]]
@@ -200,19 +191,6 @@ def main():
             obj["attr"], obj["attr_conf"] = postprocess_attr(
                 dataset_attr_labelmap, obj["attr"], obj["attr_conf"]
             )
-    if cfg.MODEL.RELATION_ON and args.visualize_relation:
-        for rel in rel_dets:
-            rel["class"] = dataset_relation_labelmap[rel["class"]]
-            subj_rect = dets[rel["subj_id"]]["rect"]
-            rel["subj_center"] = [
-                (subj_rect[0] + subj_rect[2]) / 2,
-                (subj_rect[1] + subj_rect[3]) / 2,
-            ]
-            obj_rect = dets[rel["obj_id"]]["rect"]
-            rel["obj_center"] = [
-                (obj_rect[0] + obj_rect[2]) / 2,
-                (obj_rect[1] + obj_rect[3]) / 2,
-            ]
 
     rects = [d["rect"] for d in dets]
     scores = [d["conf"] for d in dets]
@@ -227,19 +205,12 @@ def main():
 
     draw_bb(cv2_img, rects, labels, scores)
 
-    if cfg.MODEL.RELATION_ON and args.visualize_relation:
-        rel_subj_centers = [r["subj_center"] for r in rel_dets]
-        rel_obj_centers = [r["obj_center"] for r in rel_dets]
-        rel_scores = [r["conf"] for r in rel_dets]
-        rel_labels = [r["class"] for r in rel_dets]
-        draw_rel(cv2_img, rel_subj_centers, rel_obj_centers, rel_labels, rel_scores)
-
-    if not args.save_file:
-        save_file = op.splitext(args.img_file)[0] + ".detect.jpg"
+    if not args.save_dir:
+        save_dir = op.splitext(args.img_file)[0] + ".detect.jpg"
     else:
-        save_file = args.save_file
-    cv2.imwrite(save_file, cv2_img)
-    print("save results to: {}".format(save_file))
+        save_dir = args.save_dir
+    cv2.imwrite(save_dir, cv2_img)
+    print("save results to: {}".format(save_dir))
 
     # save results in text
     if cfg.MODEL.ATTRIBUTE_ON and args.visualize_attr:
@@ -248,7 +219,7 @@ def main():
             result_str += label + "\n"
             result_str += ",".join([str(conf) for conf in attr_score])
             result_str += "\t" + str(score) + "\n"
-        text_save_file = op.splitext(save_file)[0] + ".txt"
+        text_save_file = op.splitext(save_dir)[0] + ".txt"
         with open(text_save_file, "w") as fid:
             fid.write(result_str)
 
