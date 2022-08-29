@@ -1,11 +1,8 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-from maskrcnn_benchmark import _C
 
-try:
-    import torchvision
-    from torchvision.ops import nms
-except:
-    nms = _C.nms
+import torchvision
+from torchvision.ops import nms
+
 
 
 # nms.__doc__ = """

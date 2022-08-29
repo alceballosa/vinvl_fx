@@ -1,6 +1,6 @@
 MODEL:
     META_ARCHITECTURE: "AttrRCNN"
-    WEIGHT: "pretrained_model/gqa/gqa_X152C4_vrdvgvrd_lr0.003_bsz8_objscore005_nooverlap/model_0080000.pth"
+    WEIGHT: "pretrained_model/vinvl_vg_x152c4.pth"
     BACKBONE:
       CONV_BODY: "R-152-C4"
     RESNETS:

@@ -1,4 +1,4 @@
-# Copyright (c) 2021 Microsoft Corporation. Licensed under the MIT license. 
+# Copyright (c) 2021 Microsoft Corporation. Licensed under the MIT license.
 
 import cv2
 import os.path as op
@@ -105,7 +105,7 @@ def main():
         dataset_attr_labelmap = {
             int(val): key for key, val in
             dataset_allmap['attribute_to_idx'].items()}
-    
+
     if cfg.MODEL.RELATION_ON and args.visualize_relation:
         dataset_relation_labelmap = {
             int(val): key for key, val in
@@ -114,7 +114,7 @@ def main():
     transforms = build_transforms(cfg, is_train=False)
     cv2_img = cv2.imread(args.img_file)
     dets = detect_objects_on_single_image(model, transforms, cv2_img)
-
+    
     if isinstance(model, SceneParser):
         rel_dets = dets['relations']
         dets = dets['objects']

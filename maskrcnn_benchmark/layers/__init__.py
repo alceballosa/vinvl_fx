@@ -14,11 +14,6 @@ from .roi_pool import ROIPool
 from .roi_pool import roi_pool
 from .smooth_l1_loss import smooth_l1_loss
 from .sigmoid_focal_loss import SigmoidFocalLoss
-from .dcn.deform_conv_func import deform_conv, modulated_deform_conv
-from .dcn.deform_conv_module import DeformConv, ModulatedDeformConv, ModulatedDeformConvPack
-from .dcn.deform_pool_func import deform_roi_pooling
-from .dcn.deform_pool_module import DeformRoIPooling, DeformRoIPoolingPack, ModulatedDeformRoIPoolingPack
-
 
 __all__ = [
     "nms",
@@ -34,14 +29,4 @@ __all__ = [
     "BatchNorm2d",
     "FrozenBatchNorm2d",
     "SigmoidFocalLoss",
-    'deform_conv',
-    'modulated_deform_conv',
-    'DeformConv',
-    'ModulatedDeformConv',
-    'ModulatedDeformConvPack',
-    'deform_roi_pooling',
-    'DeformRoIPooling',
-    'DeformRoIPoolingPack',
-    'ModulatedDeformRoIPoolingPack',
 ]
-
