@@ -33,38 +33,6 @@ def detect_objects_on_single_image(
     img_height = cv2_img.shape[0]
     img_width = cv2_img.shape[1]
     prediction = predictions[0].resize((img_width, img_height))
+    return prediction
 
-    dict_output = {}
-    # features for the
-    dict_output["image_features"] = prediction.get_field("box_features")[-1].numpy()
-    dict_output["boxes"] = {}
 
-    # for all lists, remove the last element which corresponds
-    # to the full image features
-    boxes = np.array(prediction.bbox.tolist()[:-1])
-    classes = prediction.get_field("labels").tolist()[:-1]
-    scores = np.array(prediction.get_field("scores").tolist()[:-1])
-    bbox_features = prediction.get_field("box_features")[:-1].numpy()
-    if "attr_scores" in prediction.extra_fields:
-        attr_scores = np.array(prediction.get_field("attr_scores")[:-1])
-        attr_labels = prediction.get_field("attr_labels")[:-1]
-        dict_output["boxes"] = [
-            {
-                "rect": box,
-                "class": cls,
-                "feature": feature,
-                "conf": score,
-                "attr": attr[attr_conf > 0.01].tolist(),
-                "attr_conf": attr_conf[attr_conf > 0.01].tolist(),
-            }
-            for box, cls, feature, score, attr, attr_conf in zip(
-                boxes, classes, bbox_features, scores, attr_labels, attr_scores
-            )
-        ]
-        return dict_output
-
-    # TODO: fix this branch
-    return [
-        {"rect": box, "class": cls, "conf": score}
-        for box, cls, score in zip(boxes, classes, scores)
-    ]
