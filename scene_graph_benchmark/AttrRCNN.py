@@ -5,10 +5,10 @@ Implements the FRCNN with Attribute Head
 import numpy as np
 import torch
 
+from maskrcnn_benchmark.modeling.detector.generalized_rcnn import GeneralizedRCNN
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.image_list import to_image_list
-from maskrcnn_benchmark.modeling.detector.generalized_rcnn import \
-    GeneralizedRCNN
+
 from .attribute_head.attribute_head import build_roi_attribute_head
 
 
@@ -66,12 +66,14 @@ class AttrRCNN(GeneralizedRCNN):
         features = self.backbone(images.tensors)
 
         if targets:
-            targets = [target.to(self.device)
-                       for target in targets if target is not None]
+            targets = [
+                target.to(self.device) for target in targets if target is not None
+            ]
 
         if self.force_boxes:
-            proposals = [BoxList(target.bbox, target.size, target.mode)
-                         for target in targets]
+            proposals = [
+                BoxList(target.bbox, target.size, target.mode) for target in targets
+            ]
             if self.training:
                 # note we still need to compute a loss using all rpn
                 # named parameters, otherwise it will
@@ -79,19 +81,17 @@ class AttrRCNN(GeneralizedRCNN):
                 null_loss = 0
                 for key, param in self.rpn.named_parameters():
                     null_loss += 0.0 * param.sum()
-                proposal_losses = {'rpn_null_loss', null_loss}
+                proposal_losses = {"rpn_null_loss", null_loss}
         else:
             proposals, proposal_losses = self.rpn(images, features, targets)
 
-        x, predictions, detector_losses = self.roi_heads(features,
-                                                         proposals, targets)
-
+        x, predictions, detector_losses = self.roi_heads(features, proposals, targets)
         if self.cfg.MODEL.ATTRIBUTE_ON:
             attribute_features = features
             # the attribute head reuse the features from the box head
             if (
-                    self.training
-                    and self.cfg.MODEL.ROI_ATTRIBUTE_HEAD.SHARE_BOX_FEATURE_EXTRACTOR
+                self.training
+                and self.cfg.MODEL.ROI_ATTRIBUTE_HEAD.SHARE_BOX_FEATURE_EXTRACTOR
             ):
                 attribute_features = x
             # During training, self.box() will return the unaltered proposals as "detections"
@@ -100,11 +100,9 @@ class AttrRCNN(GeneralizedRCNN):
                 attribute_features, predictions, targets
             )
             detector_losses.update(loss_attribute)
-
         if self.training:
             losses = {}
             losses.update(detector_losses)
             losses.update(proposal_losses)
             return losses
-
         return predictions

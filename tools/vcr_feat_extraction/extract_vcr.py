@@ -72,6 +72,9 @@ def postprocess_attr(dataset_attr_labelmap, label_list, conf_list):
         return [[], []]
 
 
+# TODO: implement io functions for saving these results
+# TODO: implement a function for mapping attr and class ids to strings before saving
+
 def process_vcr_item(model, item: dict, path_dataset: Path, cfg: dict):
     """
     Extract ResNext152 features for a single VCR item.
@@ -82,11 +85,13 @@ def process_vcr_item(model, item: dict, path_dataset: Path, cfg: dict):
     with open(path_metadata, "r", encoding="utf-8") as file:
         metadata = json.load(file)
     boxes = [box[0:4] for box in metadata["boxes"]]
+    # add a bounding box for the entire image
+    boxes += [[0, 0, img.shape[1] - 1, img.shape[0] - 1]]
     box_list = BoxList(bbox=boxes, image_size=(img.shape[1], img.shape[0]), mode="xyxy")
     # box_list.add_field("labels", metadata["names"])
     transforms = build_transforms(cfg, is_train=False)
-    dets = detect_objects_on_single_image(model, transforms, img, box_list)
-    return img, dets
+    output_dict = detect_objects_on_single_image(model, transforms, img, box_list)
+    return img, output_dict["boxes"]
 
 
 def main():
@@ -128,7 +133,7 @@ def main():
     cfg.merge_from_list(args.opts)
 
     cfg.MODEL.ROI_BOX_HEAD.FORCE_BOXES = True
-    
+
     cfg.freeze()
 
     assert op.isfile(args.jsonl_file), "Jsonl file: {} does not exist".format(
@@ -179,7 +184,8 @@ def main():
         }
 
     # for idx in tqdm(range(len(items))):
-    cv2_img, dets = process_vcr_item(model, items[0], path_dataset, cfg)
+    # TODO: reimplement for loop
+    cv2_img, dets = process_vcr_item(model, items[288], path_dataset, cfg)
     #    break
 
     for obj in dets:
