@@ -74,36 +74,6 @@ def postprocess_attr(dataset_attr_labelmap, label_list, conf_list):
         return [[], []]
 
 
-def save_fx_hdf5(prediction: BoxList, output_file: Path):
-    """
-    Saves prediction into an H5 file. Note that the classes and attributes
-    are saved as class ids, so they must be converted to strings after being
-    loaded.
-
-    Parameters:
-        prediction (BoxList):
-            prediction to save
-        output_file (Path):
-            path where the prediction will be saved
-    """
-    image_features = prediction.get_field("box_features")[-1:].numpy()
-    box_coords = prediction.bbox.numpy()[:-1]
-    box_features = prediction.get_field("box_features")[:-1].numpy()
-    predicted_classes = prediction.get_field("labels")[:-1].numpy()
-    predicted_scores = prediction.get_field("scores")[:-1].numpy()
-    predicted_attr_labels = prediction.get_field("attr_labels")[:-1].numpy()
-    predicted_attr_scores = prediction.get_field("attr_scores")[:-1].numpy()
-
-    with h5py.File(str(output_file), "w") as file:
-        _ = file.create_dataset("image_features", data=image_features)
-        _ = file.create_dataset("box_coords", data=box_coords)
-        _ = file.create_dataset("box_features", data=box_features)
-        _ = file.create_dataset("predicted_classes", data=predicted_classes)
-        _ = file.create_dataset("predicted_class_scores", data=predicted_scores)
-        _ = file.create_dataset("predicted_attr_labels", data=predicted_attr_labels)
-        _ = file.create_dataset("predicted_attr_scores", data=predicted_attr_scores)
-
-
 def save_fx_image(
     prediction: BoxList,
     img: np.ndarray,
@@ -160,6 +130,48 @@ def save_fx_image(
         fid.write(result_str)
 
 
+def save_fx_hdf5(prediction: BoxList, img_dims: tuple, output_file: Path, img_id: str):
+    """
+    Saves prediction into an H5 file. Note that the classes and attributes
+    are saved as class ids, so they must be converted to strings after being
+    loaded.
+
+    Parameters:
+        prediction (BoxList):
+            prediction to save
+        output_file (Path):
+
+            path where the prediction will be saved
+    """
+
+    (width, height) = img_dims
+    image_features = prediction.get_field("box_features")[-1:].numpy()
+    # x1,y1,x2,y2,width,height...
+    box_coords = prediction.bbox.numpy()[:-1].copy()
+    # normalize box coordinates
+    box_coords[:, 0] /= width
+    box_coords[:, 1] /= height
+    box_coords[:, 2] /= width
+    box_coords[:, 3] /= height
+    box_widths = np.abs(box_coords[:, 2] - box_coords[:, 0])
+    box_heights = np.abs(box_coords[:, 3] - box_coords[:, 1])
+    box_coords = np.hstack((box_coords, box_widths[:, None], box_heights[:, None]))
+    box_features = prediction.get_field("box_features")[:-1].numpy()
+    predicted_classes = prediction.get_field("labels")[:-1].numpy()
+    predicted_scores = prediction.get_field("scores")[:-1].numpy()
+    predicted_attr_labels = prediction.get_field("attr_labels")[:-1].numpy()
+    predicted_attr_scores = prediction.get_field("attr_scores")[:-1].numpy()
+    with h5py.File(str(output_file), "a") as file:
+        group = file.create_group(img_id)
+        _ = group.create_dataset("image_features", data=image_features)
+        _ = group.create_dataset("box_coords", data=box_coords)
+        _ = group.create_dataset("box_features", data=box_features)
+        _ = group.create_dataset("predicted_classes", data=predicted_classes)
+        _ = group.create_dataset("predicted_class_scores", data=predicted_scores)
+        _ = group.create_dataset("predicted_attr_labels", data=predicted_attr_labels)
+        _ = group.create_dataset("predicted_attr_scores", data=predicted_attr_scores)
+
+
 def process_vcr_image(
     model,
     path_img: Path,
@@ -175,23 +187,30 @@ def process_vcr_image(
     movie_dir = path_img.parent.name
     output_movie_dir = output_dir / movie_dir
     output_movie_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_movie_dir / path_img.name.replace("jpg", "h5")
-    if output_file.exists():
-        print(f"Skipping {path_img}, features were calculated already")
-        return
+    img_key = output_movie_dir.name + "/" + path_img.name
+    # don't get features if the image has already been processed
+    features_file = output_movie_dir.parent / "features.hdf5"
+    try:
+        with h5py.File(features_file, "r") as file:
+            if img_key in file:
+                print(f"Skipping {img_key} because it already exists")
+                return
+    except FileNotFoundError:
+        print("Will create features.h5")
 
-    path_metadata = Path(str(path_img).replace("jpg", "json"))
     img = cv2.imread(str(path_img))
+    # load boxes from metadata
+    path_metadata = Path(str(path_img).replace("jpg", "json"))
     with open(path_metadata, "r", encoding="utf-8") as file:
         metadata = json.load(file)
     boxes = [box[0:4] for box in metadata["boxes"]]
+
     # add a bounding box for the entire image
     boxes += [[0, 0, img.shape[1] - 1, img.shape[0] - 1]]
     box_list = BoxList(bbox=boxes, image_size=(img.shape[1], img.shape[0]), mode="xyxy")
-    # box_list.add_field("labels", metadata["names"])
     transforms = build_transforms(cfg, is_train=False)
     prediction = detect_objects_on_single_image(model, transforms, img, box_list)
-    save_fx_hdf5(prediction, output_file)
+    save_fx_hdf5(prediction, (img.shape[1], img.shape[0]), features_file, img_key)
     save_fx_image(
         prediction,
         img,
@@ -279,8 +298,6 @@ def main():
         int(val): key for key, val in dataset_allmap["attribute_to_idx"].items()
     }
 
-    # for idx in tqdm(range(len(items))):
-    # TODO: reimplement for loop
     n_images = len(list_images)
     for idx in tqdm(range(n_images)):
         process_vcr_image(
@@ -291,7 +308,6 @@ def main():
             dataset_labelmap,
             dataset_attr_labelmap,
         )
-
 
 if __name__ == "__main__":
     main()
